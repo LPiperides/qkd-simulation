@@ -41,7 +41,7 @@ From Python:
 ```python
 from qkd_sim import simulate, summarize
 
-transcript = simulate("sarg04", 10_000, noise=0.05, seed=42)   # one row per qubit
+transcript = simulate("sarg04", 10_000, noise=0.05, seed=42)  # one row per qubit
 print(summarize(transcript, protocol="sarg04"))
 # Summary(protocol='sarg04', num_bits=10000, with_eve=False, retention=0.2598,
 #         qber=0.0497, eve_agreement=nan, i_ab=0.7151, i_ae=0.0, key_rate=0.1118, f_ec=1.0)
