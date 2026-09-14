@@ -1,6 +1,6 @@
 # qkd-sim
 
-[![CI](https://github.com/piperidesl/qkd-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/piperidesl/qkd-sim/actions/workflows/ci.yml)
+[![CI](https://github.com/LPiperides/qkd-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/LPiperides/qkd-sim/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)
 ![Qiskit](https://img.shields.io/badge/qiskit-%E2%89%A5%201.0-6929c4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)

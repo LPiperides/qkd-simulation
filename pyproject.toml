@@ -39,7 +39,7 @@ dev = ["pytest>=8", "ruff>=0.5", "matplotlib>=3.8"]
 qkd-sim = "qkd_sim.cli:main"
 
 [project.urls]
-Repository = "https://github.com/piperidesl/qkd-sim"
+Repository = "https://github.com/LPiperides/qkd-sim"
 
 [tool.setuptools.packages.find]
 where = ["src"]
