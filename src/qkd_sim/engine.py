@@ -1,9 +1,11 @@
 """Transmission engine: Alice -> (Eve) -> Bob in at most two simulator passes.
 
-Every protocol here follows the same physical script. Alice prepares one of
-four states per round. Optionally Eve intercepts each qubit, measures it in a
-basis of her choosing and re-sends the state corresponding to her outcome
-(an *intercept-and-resend* attack). Bob then measures in his own basis.
+Every prepare-and-measure protocol follows the same physical script (E91,
+which starts from an entangled pair, has its own two-stage version in
+:mod:`qkd_sim.e91`). Alice prepares one of four states per round. Optionally
+Eve intercepts each qubit, measures it in a basis of her choosing and re-sends
+the state corresponding to her outcome (an *intercept-and-resend* attack). Bob
+then measures in his own basis.
 
 Eve's re-sent state depends on her measurement outcome, so her hop has to be
 simulated before Bob's can be built. That gives a natural two-stage

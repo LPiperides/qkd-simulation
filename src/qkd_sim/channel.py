@@ -1,7 +1,8 @@
 """Quantum channel noise model.
 
-The channel between Alice and Bob (or Alice and Eve, and Eve and Bob) is
-modelled as a single-qubit depolarizing channel
+Every hop a qubit makes (Alice to Bob, Alice to Eve and Eve to Bob, or from
+E91's pair source to either party) is modelled as a single-qubit depolarizing
+channel
 
     E(rho) = (1 - p) rho + p I/2,
 

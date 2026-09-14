@@ -1,7 +1,8 @@
-"""Single-qubit circuit primitives shared by every protocol.
+"""Single-qubit circuit primitives shared by the prepare-and-measure protocols.
 
-All three protocols in this package are prepare-and-measure schemes built
-from the same four states and two measurement bases:
+BB84, B92 and SARG04 are prepare-and-measure schemes built from the same
+four states and two measurement bases (E91 adds its own two-qubit circuits in
+:mod:`qkd_sim.e91` but re-uses these for the state Eve re-sends):
 
     basis '+' (computational / Z):  bit 0 -> |0>,  bit 1 -> |1>
     basis 'x' (diagonal / X):       bit 0 -> |+>,  bit 1 -> |->

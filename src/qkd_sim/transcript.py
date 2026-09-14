@@ -1,4 +1,4 @@
-"""The transcript: one DataFrame row per transmitted qubit.
+"""The transcript: one DataFrame row per transmitted qubit (or entangled pair).
 
 Every protocol returns the same core schema so that the metrics in
 :mod:`qkd_sim.metrics` are protocol-agnostic:

@@ -4,6 +4,7 @@ Examples::
 
     qkd-sim run --protocol bb84 -n 10000 --eve --seed 42
     qkd-sim run --protocol sarg04 -n 5000 --noise 0.05 --show 8
+    qkd-sim run --protocol e91 -n 10000 --seed 42 --json
     qkd-sim sweep --protocol all --noise 0:0.3:0.02 --seeds 5 -n 4000 --out data/sweep.csv
 """
 
