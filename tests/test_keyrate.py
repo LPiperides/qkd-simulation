@@ -1,7 +1,28 @@
+import itertools
+
 import numpy as np
 import pytest
 
-from qkd_sim.keyrate import h2, qber_threshold, secret_key_rate
+from qkd_sim.keyrate import di_key_rate, h2, qber_threshold, secret_key_rate
+
+
+def test_di_key_rate_endpoints():
+    tsirelson = 2 * np.sqrt(2)
+    assert di_key_rate(tsirelson, 0.0) == 1.0
+    assert di_key_rate(2.0, 0.0) == 0.0
+    assert di_key_rate(1.4, 0.0) == 0.0
+    assert di_key_rate(2.9, 0.0) == 1.0  # empirical S past Tsirelson is clipped
+    assert di_key_rate(tsirelson, 0.5) == 0.0
+    assert np.isnan(di_key_rate(float("nan"), 0.1))
+    assert di_key_rate(2.5, 0.02, retention=0.5) == pytest.approx(0.5 * di_key_rate(2.5, 0.02))
+    with pytest.raises(ValueError):
+        di_key_rate(2.5, 0.1, f_ec=0.9)
+
+
+def test_di_key_rate_is_non_decreasing_in_chsh():
+    rates = [di_key_rate(s, 0.02) for s in np.linspace(2.0, 2 * np.sqrt(2), 30)]
+    assert all(a <= b for a, b in itertools.pairwise(rates))
+    assert rates[-1] > rates[0]
 
 
 def test_binary_entropy_values():
@@ -35,4 +56,4 @@ def test_secret_key_rate_values():
 
 def test_secret_key_rate_is_non_increasing_in_qber():
     rates = [secret_key_rate(q) for q in np.linspace(0.0, 0.5, 51)]
-    assert all(a >= b for a, b in zip(rates[:-1], rates[1:], strict=True))
+    assert all(a >= b for a, b in itertools.pairwise(rates))

@@ -5,13 +5,15 @@
 ![Qiskit](https://img.shields.io/badge/qiskit-%E2%89%A5%201.0-6929c4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Three prepare-and-measure quantum key distribution protocols, BB84, B92 and
-SARG04, simulated shot by shot on Qiskit Aer with an intercept-and-resend
-eavesdropper and a depolarizing channel. Every run yields a full transcript,
-protocol-correct sifting, the QBER, Eve's Shannon information about the key
-and a Shor-Preskill secret-key-rate estimate. Results are checked against
-closed-form theory in the test suite, runs are reproducible from a single
-seed, and 20,000 qubits take under half a second.
+Four quantum key distribution protocols, the prepare-and-measure BB84, B92
+and SARG04 and the entanglement-based E91, simulated shot by shot on Qiskit
+Aer with an intercept-and-resend eavesdropper and a depolarizing channel.
+Every run yields a full transcript, protocol-correct sifting, the QBER, Eve's
+Shannon information about the key and a Shor-Preskill secret-key-rate
+estimate; E91 adds a CHSH Bell test and the device-independent key rate it
+certifies. Results are checked against closed-form theory in the test suite,
+runs are reproducible from a single seed, and 20,000 qubits take well under a
+second.
 
 ![Secret key rate against channel noise](figures/key_rate_vs_noise.png)
 
@@ -34,6 +36,20 @@ BB84  n=10000  eve=yes  noise=0.000  seed=42
   I(A:E)           0.1744 bits per sifted bit
   secret key rate  0.0000 per sent qubit   (f_ec=1.00, threshold QBER 0.1100)
   simulated in     0.28 s
+```
+
+The entanglement-based protocol reports its Bell test as well:
+
+```
+$ qkd-sim run --protocol e91 -n 10000 --seed 42
+E91  n=10000  eve=no  noise=0.000  seed=42
+  key retention    0.2218   (theory 0.2222)
+  QBER             0.0000   (theory 0.0000)
+  I(A:B)           1.0000 bits per sifted bit
+  secret key rate  0.2218 per sent qubit   (f_ec=1.00, threshold QBER 0.1100)
+  CHSH S           2.8081   (theory 2.8284)   (local bound 2, quantum maximum 2.8284)
+  DI key rate      0.2081 per sent pair   (device-independent bound from S and QBER)
+  simulated in     0.19 s
 ```
 
 From Python:
@@ -65,14 +81,20 @@ qubits each (`data/sweep.csv`):
 | B92 | intercept-and-resend | 0.372 | 3/8 | 0.334 | 1/3 | 0.491 | 0.491 |
 | SARG04 | ideal channel | 0.252 | 1/4 | 0.000 | 0 | | |
 | SARG04 | intercept-and-resend | 0.371 | 3/8 | 0.330 | 1/3 | 0.497 | 0.497 |
+| E91 | ideal channel | 0.216 | 2/9 | 0.000 | 0 | | |
+| E91 | intercept-and-resend | 0.216 | 2/9 | 0.254 | 1/4 | 0.800 | 0.280 |
+
+E91's CHSH value comes out at 2.85 on the ideal channel (theory `2 sqrt2 =
+2.83`) and 1.40 under attack (theory `sqrt2 = 1.41`).
 
 ![QBER with and without an eavesdropper](figures/qber_comparison.png)
 
 **Channel noise without an attacker.** Under a depolarizing channel of
 strength `p` the QBER grows as `p/2` for BB84 but as `p/(1+p)` for B92 and
 SARG04, whose unambiguous-discrimination sifting turns noise into
-conclusive-but-wrong rounds. BB84 crosses the 11% key-rate threshold at
-`p = 0.22`; the other two at `p = 0.12`.
+conclusive-but-wrong rounds, and as `(1 - (1-p)^2)/2` for E91, both of whose
+qubits travel through the channel. BB84 crosses the 11% key-rate threshold at
+`p = 0.22`; the other three at `p = 0.12`.
 
 ![QBER against channel noise](figures/qber_vs_noise.png)
 
@@ -81,9 +103,19 @@ leaves Eve with exactly as much information about the sifted key as Bob has,
 `I(A:E) = I(A:B) = 1 - h2(1/4) = 0.189` bits, which is the operational
 meaning of the 25% QBER signature. On B92 and SARG04 she does far better:
 her conclusive guesses on a clean state are never wrong, so she holds 0.5 bits
-per sifted bit while Bob's 1/3 error rate leaves him 0.08.
+per sifted bit while Bob's 1/3 error rate leaves him 0.08. On E91 she measures
+Bob's half of the pair in Z or X, learns Alice's outcome on 80% of the key
+rounds (0.28 bits against Bob's 0.19) and, in doing so, halves the CHSH value.
 
 ![Mutual information against channel noise](figures/mutual_information_vs_noise.png)
+
+**The Bell test.** E91's CHSH value falls as `2 sqrt2 (1-p)^2` under channel
+noise and only reaches the local-realist bound `S = 2` at `p = 0.16`, after the
+heuristic key has vanished at `p = 0.12` and well after the device-independent
+key at `p = 0.07`. An intercept-and-resend attacker does not need noise to be
+caught: she halves `S` to `sqrt2` at once.
+
+![CHSH value against channel noise](figures/chsh_vs_noise.png)
 
 ## What is inside
 
@@ -96,20 +128,24 @@ src/qkd_sim/
     bb84.py         BB84: basis reconciliation
     b92.py          B92: unambiguous state discrimination
     sarg04.py       SARG04: bit in the basis, public announcement of a non-orthogonal pair
-    metrics.py      retention, QBER, Eve agreement, mutual information, summary
-    keyrate.py      binary entropy, Shor-Preskill key rate, QBER threshold
+    e91.py          E91: Bell-pair source, three settings per party, CHSH test
+    metrics.py      retention, QBER, Eve agreement, mutual information, CHSH, summary
+    keyrate.py      binary entropy, Shor-Preskill key rate, device-independent rate, threshold
     theory.py       closed-form expectations used by the tests and the figures
     cli.py          the qkd-sim command
-tests/              77 tests, about 5 s
+tests/              95 tests, about 5 s
 scripts/            run_sweep.py, make_figures.py, benchmark.py
 docs/theory.md      derivations of every number above
 ```
 
-Every protocol returns the same transcript: one row per qubit with Alice's
-basis, key bit and state, Eve's basis, outcome and guess when present, Bob's
-basis, outcome and state, whether the round survived sifting, and Bob's key
-bit. The metrics are plain reductions over those columns, so they are shared
-by all three protocols and can be run on a transcript loaded back from CSV.
+Every protocol returns the same transcript: one row per qubit (or pair) with
+Alice's basis, key bit and state, Eve's basis, outcome and guess when present,
+Bob's basis, outcome and state, whether the round survived sifting, and Bob's
+key bit. The metrics are plain reductions over those columns, so they are
+shared by all four protocols and can be run on a transcript loaded back from
+CSV. E91's basis columns hold its measurement angles and it adds a
+`round_use` column (`key`, `chsh` or `discard`) from which the CHSH value is
+computed.
 
 ## Design notes
 
@@ -152,8 +188,28 @@ argument and that shuffling Alice's bits leaves the sifted key unchanged.
 
 **The key-rate bound is a theorem for BB84 only.** `r = retention x
 max(0, 1 - (1 + f_ec) h2(Q))` is the Shor-Preskill asymptotic rate with an
-error-correction inefficiency `f_ec`. It is applied to B92 and SARG04 for a
-like-for-like comparison and labelled heuristic wherever it appears.
+error-correction inefficiency `f_ec`. It is applied to B92, SARG04 and E91
+for a like-for-like comparison and labelled heuristic wherever it appears.
+
+**E91 is the same engine with two-qubit circuits.** A round is one of nine
+(Alice setting, Bob setting) pairs, so an unattacked run is nine circuits of a
+Bell pair measured along two angles; with Eve it is six two-qubit circuits for
+the Alice-Eve stage plus twelve single-qubit ones for the eigenstate she
+re-sends to Bob. Eve measures Bob's half of the pair only, and that is enough:
+on |Phi+> her measurement projects Alice's qubit onto the same eigenstate, the
+pair becomes a product state, every correlator halves and S drops from
+2 sqrt2 to sqrt2. The error she causes on the key rounds is 25%, BB84's
+signature exactly.
+
+**E91's key rate is reported twice.** Its two key settings, pi/4 and pi/2,
+are not conjugate bases (their eigenstates overlap with probability
+cos^2(pi/8) = 0.85), so the Shor-Preskill expression is a heuristic here. The
+transcript carries the CHSH value, so the summary also gives the
+device-independent bound of Pironio et al.,
+`r = 1 - h2(Q) - h2((1 + sqrt(S^2/4 - 1))/2)`, which trusts nothing about the
+devices and is zero for any `S <= 2`. It is far more demanding: on a
+depolarizing channel it vanishes at `p = 0.074`, the heuristic at `p = 0.117`
+and the Bell violation itself only at `p = 0.159`.
 
 ## Testing
 
@@ -164,17 +220,16 @@ four or more standard deviations, so the suite stays deterministic without
 becoming brittle to a change in Aer's random stream. Unit tests cover the
 circuit primitives (statevectors, non-mutation, determinism in a matching
 basis), the noise model, the engine's seeding, every sifting rule on
-hand-built rounds, the entropy and key-rate functions, transcript
-reproducibility and the CLI.
+hand-built rounds, the Bell-pair statevector and CHSH bookkeeping, the
+entropy and key-rate functions, transcript reproducibility and the CLI.
 
 ```bash
-pytest          # 77 tests
+pytest          # 95 tests
 ruff check .    # lint
 ```
 
 ## Roadmap
 
-- E91, the entanglement-based protocol, with a CHSH test in place of QBER.
 - Photon-number-splitting attacks and decoy states, the setting SARG04 was
   designed for.
 - Finite-key analysis instead of the asymptotic bound.
@@ -187,6 +242,9 @@ ruff check .    # lint
 - V. Scarani, A. Acín, G. Ribordy and N. Gisin, *Quantum cryptography protocols robust against photon number splitting attacks for weak laser pulse implementations*, Phys. Rev. Lett. 92, 057901 (2004).
 - P. W. Shor and J. Preskill, *Simple proof of security of the BB84 quantum key distribution protocol*, Phys. Rev. Lett. 85, 441 (2000).
 - I. Csiszár and J. Körner, *Broadcast channels with confidential messages*, IEEE Trans. Inf. Theory 24, 339 (1978).
+- A. K. Ekert, *Quantum cryptography based on Bell's theorem*, Phys. Rev. Lett. 67, 661 (1991).
+- J. F. Clauser, M. A. Horne, A. Shimony and R. A. Holt, *Proposed experiment to test local hidden-variable theories*, Phys. Rev. Lett. 23, 880 (1969).
+- S. Pironio, A. Acín, N. Brunner, N. Gisin, S. Massar and V. Scarani, *Device-independent quantum key distribution secure against collective attacks*, New J. Phys. 11, 045021 (2009).
 
 ## License
 

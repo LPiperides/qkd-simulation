@@ -22,7 +22,7 @@ import pandas as pd
 from . import PROTOCOLS, simulate
 from .keyrate import qber_threshold
 from .metrics import Summary, summarize
-from .theory import expected
+from .theory import expected, expected_chsh
 
 PROTOCOL_CHOICES = sorted(PROTOCOLS)
 
@@ -54,6 +54,13 @@ def theory_for(protocol: str, with_eve: bool, noise: float) -> tuple[float, floa
         return math.nan, math.nan
 
 
+def theory_chsh_for(protocol: str, with_eve: bool, noise: float) -> float:
+    """Analytic CHSH value, or NaN for a protocol without a Bell test."""
+    if protocol.lower() != "e91":
+        return math.nan
+    return expected_chsh(with_eve=with_eve, noise=noise)
+
+
 def format_summary(s: Summary, *, noise: float, seed: int | None) -> str:
     theory_retention, theory_qber = theory_for(s.protocol, s.with_eve, noise)
 
@@ -75,6 +82,16 @@ def format_summary(s: Summary, *, noise: float, seed: int | None) -> str:
         f"  secret key rate  {s.key_rate:.4f} per sent qubit"
         f"   (f_ec={s.f_ec:.2f}, threshold QBER {qber_threshold(s.f_ec):.4f})"
     )
+    if not math.isnan(s.chsh):
+        lines.append(
+            f"  CHSH S           {s.chsh:.4f}"
+            f"{theory(theory_chsh_for(s.protocol, s.with_eve, noise))}"
+            "   (local bound 2, quantum maximum 2.8284)"
+        )
+        lines.append(
+            f"  DI key rate      {s.di_key_rate:.4f} per sent pair"
+            "   (device-independent bound from S and QBER)"
+        )
     return "\n".join(lines)
 
 
@@ -92,6 +109,7 @@ def sweep_records(
     for protocol in protocols:
         for noise in noises:
             theory_retention, theory_qber = theory_for(protocol, with_eve, noise)
+            theory_chsh = theory_chsh_for(protocol, with_eve, noise)
             for seed in seeds:
                 df = simulate(protocol, num_bits, with_eve=with_eve, noise=noise, seed=seed)
                 s = summarize(df, protocol=protocol, f_ec=f_ec)
@@ -109,8 +127,11 @@ def sweep_records(
                         "i_ae": s.i_ae,
                         "key_rate": s.key_rate,
                         "f_ec": f_ec,
+                        "chsh": s.chsh,
+                        "di_key_rate": s.di_key_rate,
                         "theory_retention": theory_retention,
                         "theory_qber": theory_qber,
+                        "theory_chsh": theory_chsh,
                     }
                 )
     return pd.DataFrame(rows)
@@ -119,13 +140,15 @@ def sweep_records(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="qkd-sim",
-        description="Simulate BB84, B92 and SARG04 quantum key distribution on Qiskit Aer.",
+        description="Simulate BB84, B92, SARG04 and E91 quantum key distribution on Qiskit Aer.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     run = sub.add_parser("run", help="simulate one run and print its metrics")
     run.add_argument("--protocol", "-p", choices=PROTOCOL_CHOICES, required=True)
-    run.add_argument("--num-bits", "-n", type=int, default=1000, help="qubits to send")
+    run.add_argument(
+        "--num-bits", "-n", type=int, default=1000, help="qubits (or entangled pairs) to send"
+    )
     run.add_argument("--eve", action="store_true", help="add an intercept-and-resend Eve")
     run.add_argument("--noise", type=float, default=0.0, help="depolarizing probability")
     run.add_argument("--seed", type=int, default=None, help="seed for reproducible runs")
@@ -148,7 +171,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cmd_run(args: argparse.Namespace) -> int:
     started = time.perf_counter()
-    df = simulate(args.protocol, args.num_bits, with_eve=args.eve, noise=args.noise, seed=args.seed)
+    df = simulate(
+        args.protocol,
+        args.num_bits,
+        with_eve=args.eve,
+        noise=args.noise,
+        seed=args.seed,
+    )
     elapsed = time.perf_counter() - started
     s = summarize(df, protocol=args.protocol, f_ec=args.f_ec)
 
@@ -163,6 +192,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             seed=args.seed,
             theory_retention=theory_retention,
             theory_qber=theory_qber,
+            theory_chsh=theory_chsh_for(s.protocol, s.with_eve, args.noise),
             seconds=elapsed,
         )
         print(json.dumps(payload, indent=2, default=_json_default))
@@ -182,7 +212,12 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     seeds = range(args.seed_base, args.seed_base + args.seeds)
     started = time.perf_counter()
     table = sweep_records(
-        protocols, noises, seeds, num_bits=args.num_bits, with_eve=args.eve, f_ec=args.f_ec
+        protocols,
+        noises,
+        seeds,
+        num_bits=args.num_bits,
+        with_eve=args.eve,
+        f_ec=args.f_ec,
     )
     table.to_csv(args.out, index=False)
     print(

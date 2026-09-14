@@ -7,7 +7,8 @@ hop of the channel, `Q` is the quantum bit error rate on the sifted key,
 
 ## 1. States, bases and the channel
 
-Every protocol uses the same four single-qubit states:
+The three prepare-and-measure protocols use the same four single-qubit states
+(E91, section 5, measures the halves of an entangled pair instead):
 
 | basis | name | bit index 0 | bit index 1 |
 |---|---|---|---|
@@ -106,7 +107,62 @@ index is random. The apparent error rate under attack drops to
 eavesdropping as it really is. The regression test in `tests/test_sarg04.py`
 computes both conventions on the same transcript.
 
-## 5. Mutual information
+## 5. E91
+
+A source emits the Bell state `|Phi+> = (|00> + |11>)/sqrt2` and sends one
+qubit to Alice and one to Bob. Measuring "along the angle `theta`" (from Z
+towards X on the Bloch sphere) means measuring the observable
+`A(theta) = cos(theta) Z + sin(theta) X`; in the circuit this is `Ry(-theta)`
+followed by a Z measurement, with the +1 eigenstate reading as bit 0. On
+`|Phi+>` one has `<ZZ> = <XX> = 1` and `<ZX> = <XZ> = 0`, so the correlator of
+two such measurements is
+
+`E(a, b) = <A(a) (x) A(b)> = cos a cos b + sin a sin b = cos(a - b)`.
+
+Alice draws `a` from `{0, pi/4, pi/2}` and Bob draws `b` from
+`{pi/4, pi/2, 3pi/4}`, each uniformly. Of the nine combinations:
+
+| settings | rounds in 9 | `E(a, b)` | use |
+|---|---|---|---|
+| `a = b` | 2 | `1` | key: the outcomes agree with certainty, Alice's outcome is her bit |
+| `a` in `{0, pi/2}`, `b` in `{pi/4, 3pi/4}` | 4 | `+-1/sqrt2` | CHSH test |
+| the rest | 3 | | discarded |
+
+* retention `= 2/9`
+* CHSH value `S = E(0, pi/4) - E(0, 3pi/4) + E(pi/2, pi/4) + E(pi/2, 3pi/4) = 4/sqrt2 = 2 sqrt2`,
+  Tsirelson's bound, against `|S| <= 2` for every local-realist model.
+
+**Channel.** Depolarizing each qubit independently multiplies the expectation
+of every traceless single-qubit observable by `1 - p`, so with one hop per
+qubit every correlator carries the visibility `V = (1 - p)^2`:
+
+`E(a, b) = V cos(a - b)`,  `Q = (1 - V)/2 = p - p^2/2`,  `S = 2 sqrt2 V`.
+
+Both halves of the pair travel, so E91's QBER grows almost twice as fast as
+BB84's. `S` falls to the local bound 2 at `V = 1/sqrt2`, i.e. `p = 1 - 2^(-1/4)
+= 0.159`; `Q` reaches the 11% key threshold earlier, at `p = 1 - sqrt(0.78) = 0.117`.
+
+**Intercept-and-resend.** Eve intercepts Bob's qubit, measures it along
+`theta_e` in `{0, pi/2}` (Z or X) and re-sends the eigenstate she found. On
+`|Phi+>` her measurement projects Alice's qubit onto the *same* eigenstate,
+so Alice and Bob end up with a product state and the correlator factorises:
+
+`E(a, b | theta_e) = cos(a - theta_e) cos(b - theta_e)`.
+
+Averaged over Eve's two settings this is `(cos a cos b + sin a sin b)/2 =
+cos(a - b)/2`: the attack halves the visibility, `V = 1/2`, giving `Q = 1/4`
+(the same signature as BB84) and `S = sqrt2 < 2`. Channel noise composes with
+the attack: the two hops before Eve's measurement contribute `(1 - p)^2` and
+the hop from Eve to Bob another `1 - p`, so `V = (1 - p)^3 / 2` and, unlike the
+prepare-and-measure protocols, the Eve-plus-noise case has a closed form.
+
+Eve's agreement with Alice on the key: on `pi/2` rounds she is always right
+when she measured X and right half the time when she measured Z, `3/4`; on
+`pi/4` rounds either eigenstate overlaps the `pi/4` eigenstate with probability
+`cos^2(pi/8) = (2 + sqrt2)/4`. The mean over the two key settings is
+`(5 + sqrt2)/8 = 0.802`.
+
+## 6. Mutual information
 
 Over the sifted key, Alice's bit `A` and Bob's bit `B` form a binary symmetric
 channel with crossover `Q`, so `I(A:B) = 1 - h2(Q)`.
@@ -130,7 +186,13 @@ branches of section 3 with Eve's basis included), which gives
 simulation reproduces both numbers at `p = 0` in
 `figures/mutual_information_vs_noise.png`.
 
-## 6. Secret-key rate
+In E91 Eve agrees with Alice on `(5 + sqrt2)/8 = 0.802` of the key rounds
+(section 5), so `I(A:E) = 1 - h2(0.198) = 0.28` bits against Bob's
+`I(A:B) = 1 - h2(1/4) = 0.19`. Csiszár-Körner again rules out a key, and E91
+shows the intrusion twice over: as a 25% QBER and as `S = sqrt2`, well inside
+the local bound.
+
+## 7. Secret-key rate
 
 Error correction reveals at least `h2(Q)` bits per sifted bit over the public
 channel (a practical code reveals `f_ec h2(Q)` with `f_ec >= 1`); privacy
@@ -148,11 +210,30 @@ Translating the threshold into channel noise using the QBER formulas above:
 |---|---|---|
 | BB84 | `p/2` | `0.220` |
 | B92 / SARG04 | `p/(1+p)` | `0.124` |
+| E91 | `(1 - (1-p)^2)/2` | `0.117` |
 
-The bound is a theorem for BB84. Applying it to B92 and SARG04 gives a fair
-like-for-like comparison of how quickly each protocol's raw error rate
-consumes the key budget, but their rigorous single-photon security proofs
-have different thresholds, so those two curves are labelled heuristic.
+The bound is a theorem for BB84. Applying it to B92, SARG04 and E91 gives a
+fair like-for-like comparison of how quickly each protocol's raw error rate
+consumes the key budget, but their rigorous security proofs have different
+thresholds, so those curves are labelled heuristic. For E91 the point is
+sharper: its two key settings `pi/4` and `pi/2` are not conjugate bases (their
+eigenstates overlap with probability `cos^2(pi/8) = 0.85`), so the
+Shor-Preskill argument does not even apply as stated.
+
+**Device-independent rate.** What E91 has instead is the CHSH value. Pironio
+et al. (2009) show that against collective attacks, and without trusting
+anything about the measurement devices, Eve's information is bounded by `S`
+alone, giving the asymptotic rate per sifted bit
+
+`r_DI = max(0, 1 - f_ec h2(Q) - h2((1 + sqrt(S^2/4 - 1)) / 2))`.
+
+At `S = 2 sqrt2` the second entropy vanishes and the bound is the ideal
+`1 - h2(Q)`; at `S = 2` it is `h2(1/2) = 1` and nothing survives, because a
+non-violating correlation could have been produced by a pre-shared classical
+list that Eve also holds. With `Q(p)` and `S(p)` from section 5, the
+device-independent key vanishes at `p = 0.074`, well before the heuristic
+`0.117` and the end of the Bell violation at `0.159`. That ordering is the
+price of not trusting the devices.
 
 ## References
 
@@ -168,3 +249,10 @@ have different thresholds, so those two curves are labelled heuristic.
   distribution protocol*, Phys. Rev. Lett. 85, 441 (2000).
 * I. Csiszár and J. Körner, *Broadcast channels with confidential messages*,
   IEEE Trans. Inf. Theory 24, 339 (1978).
+* A. K. Ekert, *Quantum cryptography based on Bell's theorem*, Phys. Rev. Lett.
+  67, 661 (1991).
+* J. F. Clauser, M. A. Horne, A. Shimony and R. A. Holt, *Proposed experiment to
+  test local hidden-variable theories*, Phys. Rev. Lett. 23, 880 (1969).
+* S. Pironio, A. Acín, N. Brunner, N. Gisin, S. Massar and V. Scarani,
+  *Device-independent quantum key distribution secure against collective
+  attacks*, New J. Phys. 11, 045021 (2009).

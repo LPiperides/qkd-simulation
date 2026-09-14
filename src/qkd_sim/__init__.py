@@ -1,4 +1,4 @@
-"""qkd-sim: BB84, B92 and SARG04 quantum key distribution on Qiskit Aer.
+"""qkd-sim: BB84, B92, SARG04 and E91 quantum key distribution on Qiskit Aer.
 
 Quick use::
 
@@ -17,7 +17,8 @@ import pandas as pd
 from .b92 import run_b92
 from .bb84 import run_bb84
 from .channel import depolarizing_noise_model, make_simulator
-from .keyrate import h2, qber_threshold, secret_key_rate
+from .e91 import chsh, run_e91
+from .keyrate import di_key_rate, h2, qber_threshold, secret_key_rate
 from .metrics import (
     Summary,
     eve_agreement,
@@ -29,15 +30,16 @@ from .metrics import (
     summarize,
 )
 from .sarg04 import run_sarg04
-from .theory import expected
+from .theory import expected, expected_chsh
 from .transcript import validate_transcript
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 PROTOCOLS: dict[str, Callable[..., pd.DataFrame]] = {
     "bb84": run_bb84,
     "b92": run_b92,
     "sarg04": run_sarg04,
+    "e91": run_e91,
 }
 """Registry of protocol name -> simulation function."""
 
@@ -57,9 +59,12 @@ __all__ = [
     "PROTOCOLS",
     "Summary",
     "__version__",
+    "chsh",
     "depolarizing_noise_model",
+    "di_key_rate",
     "eve_agreement",
     "expected",
+    "expected_chsh",
     "h2",
     "info_ab",
     "info_ae",
@@ -70,6 +75,7 @@ __all__ = [
     "qber_threshold",
     "run_b92",
     "run_bb84",
+    "run_e91",
     "run_sarg04",
     "secret_key_rate",
     "simulate",

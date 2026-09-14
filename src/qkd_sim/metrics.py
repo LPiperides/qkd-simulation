@@ -10,7 +10,8 @@ is a plain reduction over columns:
 * :func:`mutual_information` empirical Shannon mutual information in bits
 * :func:`info_ab`            I(A:B) of a binary symmetric channel with error Q
 * :func:`info_ae`            empirical I(A:E) on the sifted key
-* :func:`summarize`          all of the above plus the secret-key-rate bound
+* :func:`summarize`          all of the above plus the secret-key-rate bound and,
+                             for E91, the CHSH value and the device-independent rate
 
 Intercept-and-resend on BB84 gives the textbook result I(A:B) = I(A:E): Eve
 knows exactly as much about the key as Bob does, and no positive key rate is
@@ -25,7 +26,9 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import pandas as pd
 
-from .keyrate import h2, secret_key_rate
+from .e91 import chsh as chsh_value
+from .e91 import has_chsh
+from .keyrate import di_key_rate, h2, secret_key_rate
 from .transcript import has_eve
 
 
@@ -120,6 +123,8 @@ class Summary:
     i_ae: float
     key_rate: float
     f_ec: float
+    chsh: float
+    di_key_rate: float
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -130,10 +135,12 @@ def summarize(df: pd.DataFrame, *, protocol: str, f_ec: float = 1.0) -> Summary:
 
     ``key_rate`` is the asymptotic Shor-Preskill bound per sent qubit
     (rigorous for BB84, heuristic for the other protocols; see
-    :mod:`qkd_sim.keyrate`).
+    :mod:`qkd_sim.keyrate`). ``chsh`` and ``di_key_rate`` are NaN unless the
+    transcript carries Bell-test rounds, i.e. came from E91.
     """
     retention = key_retention(df)
     error = qber(df)
+    bell = chsh_value(df) if has_chsh(df) else float("nan")
     return Summary(
         protocol=protocol,
         num_bits=len(df),
@@ -145,4 +152,6 @@ def summarize(df: pd.DataFrame, *, protocol: str, f_ec: float = 1.0) -> Summary:
         i_ae=info_ae(df),
         key_rate=secret_key_rate(error, retention, f_ec),
         f_ec=f_ec,
+        chsh=bell,
+        di_key_rate=di_key_rate(bell, error, retention, f_ec),
     )

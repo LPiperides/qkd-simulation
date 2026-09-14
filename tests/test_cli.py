@@ -19,7 +19,19 @@ def test_run_json(capsys):
 def test_run_text_and_csv(tmp_path, capsys):
     out = tmp_path / "t.csv"
     code = main(
-        ["run", "-p", "sarg04", "-n", "200", "--seed", "3", "--csv", str(out), "--show", "4"]
+        [
+            "run",
+            "-p",
+            "sarg04",
+            "-n",
+            "200",
+            "--seed",
+            "3",
+            "--csv",
+            str(out),
+            "--show",
+            "4",
+        ]
     )
     assert code == 0
     text = capsys.readouterr().out
@@ -30,7 +42,7 @@ def test_run_text_and_csv(tmp_path, capsys):
 
 def test_unknown_protocol_exits_with_usage_error():
     with pytest.raises(SystemExit) as exc:
-        main(["run", "--protocol", "e91", "-n", "10"])
+        main(["run", "--protocol", "bbm92", "-n", "10"])
     assert exc.value.code == 2
 
 
@@ -53,10 +65,12 @@ def test_sweep_writes_expected_rows(tmp_path, capsys):
     )
     assert code == 0
     table = pd.read_csv(out)
-    assert len(table) == 9  # 3 protocols x 3 noise levels x 1 seed
-    assert set(table["protocol"]) == {"b92", "bb84", "sarg04"}
+    assert len(table) == 12  # 4 protocols x 3 noise levels x 1 seed
+    assert set(table["protocol"]) == {"b92", "bb84", "e91", "sarg04"}
     assert (table["theory_qber"].notna()).all()
-    assert "wrote 9 rows" in capsys.readouterr().out
+    assert table["theory_chsh"].notna().sum() == 3
+    assert (table.loc[table["protocol"] == "e91", "chsh"] > 2).all()
+    assert "wrote 12 rows" in capsys.readouterr().out
 
 
 def test_noise_spec_parsing():

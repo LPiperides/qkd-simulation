@@ -25,4 +25,4 @@ def test_unseeded_runs(run):
 
 def test_unknown_protocol():
     with pytest.raises(ValueError):
-        simulate("e91", 10)
+        simulate("bbm92", 10)

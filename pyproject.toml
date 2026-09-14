@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qkd-sim"
-version = "0.1.0"
-description = "BB84, B92 and SARG04 quantum key distribution simulated on Qiskit Aer: eavesdropping, depolarizing noise, QBER, mutual information and secret-key-rate estimates"
+version = "0.2.0"
+description = "BB84, B92, SARG04 and E91 quantum key distribution simulated on Qiskit Aer: eavesdropping, depolarizing noise, QBER, CHSH tests, mutual information and secret-key-rate estimates"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Lito Piperides", email = "piperidesl@gmail.com" }]
-keywords = ["quantum", "qkd", "bb84", "b92", "sarg04", "qiskit", "cryptography"]
+keywords = ["quantum", "qkd", "bb84", "b92", "sarg04", "e91", "chsh", "qiskit", "cryptography"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
