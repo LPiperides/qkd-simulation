@@ -149,19 +149,22 @@ computed.
 
 ## Design notes
 
-**Execution cost is independent of the number of qubits.** Every round of
-every protocol is one of at most eight circuits: four states times two
-measurement bases. The engine groups rounds by that triple and runs each
-distinct circuit once with as many shots as it needs, reading per-shot memory
-back into the transcript. Eve's re-sent state depends on her outcome, so an
-attacked run is two such passes. Compared with building, transpiling and
-submitting one circuit per qubit (`scripts/benchmark.py`):
+**Execution cost is almost independent of the number of qubits.** Every
+round of a prepare-and-measure protocol is one of at most eight circuits: four
+states times two measurement bases. The engine groups rounds by that triple
+and runs each distinct circuit once with as many shots as it needs, reading
+per-shot memory back into the transcript. Eve's re-sent state depends on her
+outcome, so an attacked run is two such passes. A loop that transpiles and
+submits one circuit per qubit, which is how the first version of this
+simulator worked, costs about 150 ms per qubit on Aer; the grouped engine
+(`scripts/benchmark.py`) is dominated by fixed per-circuit overhead instead:
 
-| strategy | qubits | seconds |
-|---|---|---|
-| one transpile + run per qubit | 200 | 29.8 |
-| grouped engine, with Eve | 200 | 0.04 |
-| grouped engine, with Eve | 20,000 | 0.46 |
+| protocol | Eve | qubits or pairs | seconds |
+|---|---|---|---|
+| BB84 | yes | 200 | 0.04 |
+| BB84 | yes | 2,000 | 0.08 |
+| BB84 | yes | 20,000 | 0.48 |
+| E91 | yes | 20,000 | 0.51 |
 
 **One seed reproduces everything.** The user's seed feeds a numpy
 `Generator` that draws all classical choices and a fresh `seed_simulator`
