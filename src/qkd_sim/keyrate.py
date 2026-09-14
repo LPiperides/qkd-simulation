@@ -26,17 +26,15 @@ from __future__ import annotations
 
 import numpy as np
 
-_LOG2_EPS = 1e-300
-
 
 def h2(q):
     """Binary entropy in bits, vectorised. ``h2(0) = h2(1) = 0``, ``h2(1/2) = 1``."""
-    q_arr = np.asarray(q, dtype=float)
-    if np.any((q_arr < 0) | (q_arr > 1)):
+    p = np.asarray(q, dtype=float)
+    if np.any((p < 0) | (p > 1)):
         raise ValueError("binary entropy is defined on [0, 1]")
-    p = np.clip(q_arr, _LOG2_EPS, 1 - _LOG2_EPS)
-    out = -(p * np.log2(p) + (1 - p) * np.log2(1 - p))
-    out = np.where((q_arr == 0) | (q_arr == 1), 0.0, out)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        terms = -(p * np.log2(p) + (1 - p) * np.log2(1 - p))
+    out = np.where((p == 0) | (p == 1), 0.0, terms)
     return float(out) if out.ndim == 0 else out
 
 

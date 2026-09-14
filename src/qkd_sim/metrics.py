@@ -64,20 +64,26 @@ def eve_agreement(df: pd.DataFrame) -> float:
     return float(correct.mean())
 
 
+def _categories(values) -> pd.Series:
+    """Coerce an array-like to string categories with missing values as ``'<NA>'``."""
+    series = values if isinstance(values, pd.Series) else pd.Series(values)
+    return series.astype("string").fillna("<NA>").reset_index(drop=True)
+
+
 def mutual_information(x, y) -> float:
     """Plug-in estimate of I(X;Y) in bits from two aligned categorical arrays.
 
     Missing values are treated as a category of their own, so an inconclusive
     guess still counts as an observation of "no guess".
     """
-    xs = pd.Series(x).astype("object").where(pd.Series(x).notna(), "<NA>").to_numpy()
-    ys = pd.Series(y).astype("object").where(pd.Series(y).notna(), "<NA>").to_numpy()
+    xs = _categories(x)
+    ys = _categories(y)
     if len(xs) != len(ys):
         raise ValueError("x and y must have the same length")
     if len(xs) == 0:
         return float("nan")
 
-    joint = pd.crosstab(pd.Series(xs, name="x"), pd.Series(ys, name="y")).to_numpy(dtype=float)
+    joint = np.array(pd.crosstab(xs, ys).to_numpy(), dtype=float)
     joint /= joint.sum()
     px = joint.sum(axis=1, keepdims=True)
     py = joint.sum(axis=0, keepdims=True)
