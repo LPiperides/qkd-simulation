@@ -33,7 +33,7 @@ from .sarg04 import run_sarg04
 from .theory import expected, expected_chsh
 from .transcript import validate_transcript
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 PROTOCOLS: dict[str, Callable[..., pd.DataFrame]] = {
     "bb84": run_bb84,

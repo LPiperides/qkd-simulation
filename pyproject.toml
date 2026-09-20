@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qkd-simulation"
-version = "0.2.0"
+version = "0.2.1"
 description = "BB84, B92, SARG04 and E91 quantum key distribution simulated on Qiskit Aer: eavesdropping, depolarizing noise, QBER, CHSH tests, mutual information and secret-key-rate estimates"
 readme = "README.md"
 requires-python = ">=3.10"
