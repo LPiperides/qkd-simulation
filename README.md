@@ -1,6 +1,6 @@
-# qkd-sim
+# qkd-simulation
 
-[![CI](https://github.com/LPiperides/qkd-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/LPiperides/qkd-sim/actions/workflows/ci.yml)
+[![CI](https://github.com/LPiperides/qkd-simulation/actions/workflows/ci.yml/badge.svg)](https://github.com/LPiperides/qkd-simulation/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)
 ![Qiskit](https://img.shields.io/badge/qiskit-%E2%89%A5%201.0-6929c4)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -23,7 +23,7 @@ second.
 python -m venv .venv && source .venv/bin/activate   # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 
-qkd-sim run --protocol bb84 -n 10000 --eve --seed 42
+qkd-simulation run --protocol bb84 -n 10000 --eve --seed 42
 pytest
 ```
 
@@ -41,7 +41,7 @@ BB84  n=10000  eve=yes  noise=0.000  seed=42
 The entanglement-based protocol reports its Bell test as well:
 
 ```
-$ qkd-sim run --protocol e91 -n 10000 --seed 42
+$ qkd-simulation run --protocol e91 -n 10000 --seed 42
 E91  n=10000  eve=no  noise=0.000  seed=42
   key retention    0.2218   (theory 0.2222)
   QBER             0.0000   (theory 0.0000)
@@ -64,8 +64,8 @@ print(summarize(transcript, protocol="sarg04"))
 #         chsh=nan, di_key_rate=nan)
 ```
 
-`qkd-sim run --show 5` prints the first rounds of the transcript, and
-`--csv path` writes the whole thing. `qkd-sim sweep` scans channel noise over
+`qkd-simulation run --show 5` prints the first rounds of the transcript, and
+`--csv path` writes the whole thing. `qkd-simulation sweep` scans channel noise over
 several seeds and writes a CSV, which is how `data/sweep.csv` and every figure
 below were produced (`scripts/run_sweep.py`, then `scripts/make_figures.py`).
 
@@ -74,16 +74,16 @@ below were produced (`scripts/run_sweep.py`, then `scripts/make_figures.py`).
 Simulation against theory on an ideal channel, mean over 5 seeds of 4,000
 qubits each (`data/sweep.csv`):
 
-| protocol | setting | key retention | theory | QBER | theory | Eve agreement | I(A:E) bits |
-|---|---|---|---|---|---|---|---|
-| BB84 | ideal channel | 0.499 | 1/2 | 0.000 | 0 | | |
-| BB84 | intercept-and-resend | 0.499 | 1/2 | 0.250 | 1/4 | 0.755 | 0.197 |
-| B92 | ideal channel | 0.252 | 1/4 | 0.000 | 0 | | |
-| B92 | intercept-and-resend | 0.372 | 3/8 | 0.334 | 1/3 | 0.491 | 0.491 |
-| SARG04 | ideal channel | 0.252 | 1/4 | 0.000 | 0 | | |
-| SARG04 | intercept-and-resend | 0.371 | 3/8 | 0.330 | 1/3 | 0.497 | 0.497 |
-| E91 | ideal channel | 0.216 | 2/9 | 0.000 | 0 | | |
-| E91 | intercept-and-resend | 0.216 | 2/9 | 0.254 | 1/4 | 0.800 | 0.280 |
+| protocol | setting              | key retention | theory | QBER  | theory | Eve agreement | theory | I(A:E) bits | theory |
+| -------- | -------------------- | ------------- | ------ | ----- | ------ | ------------- | ------ | ----------- | ------ |
+| BB84     | ideal channel        | 0.499         | 1/2    | 0.000 | 0      | –             | –      | –           | –      |
+| BB84     | intercept-and-resend | 0.499         | 1/2    | 0.250 | 1/4    | 0.755         | 3/4    | 0.197       | 0.189  |
+| B92      | ideal channel        | 0.252         | 1/4    | 0.000 | 0      | –             | –      | –           | –      |
+| B92      | intercept-and-resend | 0.372         | 3/8    | 0.334 | 1/3    | 0.491         | 1/2    | 0.491       | 0.500  |
+| SARG04   | ideal channel        | 0.252         | 1/4    | 0.000 | 0      | –             | –      | –           | –      |
+| SARG04   | intercept-and-resend | 0.371         | 3/8    | 0.330 | 1/3    | 0.497         | 1/2    | 0.497       | 0.500  |
+| E91      | ideal channel        | 0.216         | 2/9    | 0.000 | 0      | –             | –      | –           | –      |
+| E91      | intercept-and-resend | 0.216         | 2/9    | 0.254 | 1/4    | 0.800         | 0.802  | 0.280       | 0.282  |
 
 E91's CHSH value comes out at 2.85 on the ideal channel (theory `2 sqrt2 =
 2.83`) and 1.40 under attack (theory `sqrt2 = 1.41`).
@@ -133,7 +133,7 @@ src/qkd_sim/
     metrics.py      retention, QBER, Eve agreement, mutual information, CHSH, summary
     keyrate.py      binary entropy, Shor-Preskill key rate, device-independent rate, threshold
     theory.py       closed-form expectations used by the tests and the figures
-    cli.py          the qkd-sim command
+    cli.py          the qkd-simulation command
 tests/              95 tests, about 5 s
 scripts/            run_sweep.py, make_figures.py, benchmark.py
 docs/theory.md      derivations of every number above
@@ -161,11 +161,11 @@ simulator worked, costs about 150 ms per qubit on Aer; the grouped engine
 (`scripts/benchmark.py`) is dominated by fixed per-circuit overhead instead:
 
 | protocol | Eve | qubits or pairs | seconds |
-|---|---|---|---|
-| BB84 | yes | 200 | 0.04 |
-| BB84 | yes | 2,000 | 0.08 |
-| BB84 | yes | 20,000 | 0.48 |
-| E91 | yes | 20,000 | 0.51 |
+| -------- | --- | --------------- | ------- |
+| BB84     | yes | 200             | 0.04    |
+| BB84     | yes | 2,000           | 0.08    |
+| BB84     | yes | 20,000          | 0.48    |
+| E91      | yes | 20,000          | 0.51    |
 
 **One seed reproduces everything.** The user's seed feeds a numpy
 `Generator` that draws all classical choices and a fresh `seed_simulator`
@@ -241,14 +241,18 @@ ruff check .    # lint
 
 ## References
 
-- C. H. Bennett and G. Brassard, *Quantum cryptography: public key distribution and coin tossing*, Proc. IEEE ICCSSP, 175 (1984).
-- C. H. Bennett, *Quantum cryptography using any two nonorthogonal states*, Phys. Rev. Lett. 68, 3121 (1992).
-- V. Scarani, A. Acín, G. Ribordy and N. Gisin, *Quantum cryptography protocols robust against photon number splitting attacks for weak laser pulse implementations*, Phys. Rev. Lett. 92, 057901 (2004).
-- P. W. Shor and J. Preskill, *Simple proof of security of the BB84 quantum key distribution protocol*, Phys. Rev. Lett. 85, 441 (2000).
-- I. Csiszár and J. Körner, *Broadcast channels with confidential messages*, IEEE Trans. Inf. Theory 24, 339 (1978).
-- A. K. Ekert, *Quantum cryptography based on Bell's theorem*, Phys. Rev. Lett. 67, 661 (1991).
-- J. F. Clauser, M. A. Horne, A. Shimony and R. A. Holt, *Proposed experiment to test local hidden-variable theories*, Phys. Rev. Lett. 23, 880 (1969).
-- S. Pironio, A. Acín, N. Brunner, N. Gisin, S. Massar and V. Scarani, *Device-independent quantum key distribution secure against collective attacks*, New J. Phys. 11, 045021 (2009).
+- C. H. Bennett and G. Brassard, _Quantum cryptography: public key distribution and coin tossing_, Proc. IEEE ICCSSP, 175 (1984).
+- C. H. Bennett, _Quantum cryptography using any two nonorthogonal states_, Phys. Rev. Lett. 68, 3121 (1992).
+- V. Scarani, A. Acín, G. Ribordy and N. Gisin, _Quantum cryptography protocols robust against photon number splitting attacks for weak laser pulse implementations_, Phys. Rev. Lett. 92, 057901 (2004).
+- P. W. Shor and J. Preskill, _Simple proof of security of the BB84 quantum key distribution protocol_, Phys. Rev. Lett. 85, 441 (2000).
+- I. Csiszár and J. Körner, _Broadcast channels with confidential messages_, IEEE Trans. Inf. Theory 24, 339 (1978).
+- A. K. Ekert, _Quantum cryptography based on Bell's theorem_, Phys. Rev. Lett. 67, 661 (1991).
+- J. F. Clauser, M. A. Horne, A. Shimony and R. A. Holt, _Proposed experiment to test local hidden-variable theories_, Phys. Rev. Lett. 23, 880 (1969).
+- S. Pironio, A. Acín, N. Brunner, N. Gisin, S. Massar and V. Scarani, _Device-independent quantum key distribution secure against collective attacks_, New J. Phys. 11, 045021 (2009).
+
+## Author
+
+Lito Piperides ([@LPiperides](https://github.com/LPiperides))
 
 ## License
 
