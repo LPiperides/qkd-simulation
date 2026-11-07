@@ -49,3 +49,11 @@ def test_stages_use_distinct_seeds(monkeypatch, ideal_simulator):
     assert len(seeds) == 2
     assert seeds[0] != seeds[1]
     assert all(isinstance(s, int) for s in seeds)
+
+
+def test_draw_seed_stays_within_aer_range():
+    from qkd_sim.primitives import SEED_LIMIT
+
+    rng = np.random.default_rng(0)
+    seeds = [engine.draw_seed(rng) for _ in range(1000)]
+    assert all(0 <= s < SEED_LIMIT for s in seeds)

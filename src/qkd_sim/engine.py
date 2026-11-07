@@ -27,14 +27,16 @@ from __future__ import annotations
 import numpy as np
 from qiskit_aer import AerSimulator
 
-from .primitives import sample_outcomes
-
-_SEED_MAX = 2**31 - 16  # leaves headroom for the +k offset used per circuit group
+from .primitives import SEED_LIMIT, sample_outcomes
 
 
 def draw_seed(rng: np.random.Generator) -> int:
-    """Draw a simulator seed from ``rng``."""
-    return int(rng.integers(0, _SEED_MAX))
+    """Draw a stage seed from ``rng``.
+
+    The samplers derive their own per-circuit-group seeds from this value (see
+    :func:`qkd_sim.primitives.run_grouped`), so no headroom is needed here.
+    """
+    return int(rng.integers(0, SEED_LIMIT))
 
 
 def transmit(

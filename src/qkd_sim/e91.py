@@ -48,7 +48,7 @@ from qiskit_aer import AerSimulator
 
 from .channel import make_simulator
 from .engine import draw_seed
-from .primitives import prepare_qubit
+from .primitives import prepare_qubit, require_values, run_grouped
 from .transcript import build_transcript, masked_bits
 
 SETTINGS: tuple[str, ...] = ("0", "pi/4", "pi/2", "3pi/4")
@@ -121,13 +121,6 @@ def measure_along(
     return measured
 
 
-def _run_group(
-    circuit: QuantumCircuit, count: int, simulator: AerSimulator, seed: int | None, k: int
-) -> list[str]:
-    options = {} if seed is None else {"seed_simulator": int(seed) + k}
-    return simulator.run(circuit, shots=count, memory=True, **options).result().get_memory()
-
-
 def sample_pair_outcomes(
     alice_settings: Sequence[str] | np.ndarray,
     partner_settings: Sequence[str] | np.ndarray,
@@ -139,24 +132,27 @@ def sample_pair_outcomes(
 
     Qubit 0 is measured along ``alice_settings[i]`` and qubit 1 along
     ``partner_settings[i]``. Rounds are grouped by their pair of settings and
-    each distinct two-qubit circuit runs once with as many shots as it has
-    rounds, exactly like :func:`qkd_sim.primitives.sample_outcomes`. Returns
-    ``(alice, partner)`` outcome arrays.
+    each distinct two-qubit circuit runs once through
+    :func:`qkd_sim.primitives.run_grouped`. Returns ``(alice, partner)``
+    outcome arrays. Raises ``ValueError`` for a setting outside :data:`SETTINGS`.
     """
     alice_settings = np.asarray(alice_settings)
     partner_settings = np.asarray(partner_settings)
     if len(alice_settings) != len(partner_settings):
         raise ValueError("alice_settings and partner_settings must have the same length")
+    require_values(alice_settings, SETTINGS, "alice_settings")
+    require_values(partner_settings, SETTINGS, "partner_settings")
 
     alice = np.empty(len(alice_settings), dtype=int)
     partner = np.empty(len(alice_settings), dtype=int)
-    for k, (a, b) in enumerate(product(SETTINGS, SETTINGS)):
-        idx = np.flatnonzero((alice_settings == a) & (partner_settings == b))
-        if idx.size == 0:
-            continue
-        circuit = measure_along(bell_pair(), a, qubit=0, clbit=0)
-        circuit = measure_along(circuit, b, qubit=1, clbit=1)
-        memory = _run_group(circuit, int(idx.size), simulator, seed, k)
+    groups = (
+        (
+            np.flatnonzero((alice_settings == a) & (partner_settings == b)),
+            measure_along(measure_along(bell_pair(), a, qubit=0, clbit=0), b, qubit=1, clbit=1),
+        )
+        for a, b in product(SETTINGS, SETTINGS)
+    )
+    for idx, memory in run_grouped(groups, simulator, seed=seed):
         # Aer writes bitstrings with clbit 1 first: "<partner><alice>".
         alice[idx] = np.fromiter((int(s[-1]) for s in memory), dtype=int, count=idx.size)
         partner[idx] = np.fromiter((int(s[-2]) for s in memory), dtype=int, count=idx.size)
@@ -171,20 +167,29 @@ def sample_resent_outcomes(
     *,
     seed: int | None = None,
 ) -> np.ndarray:
-    """Bob measures the eigenstate Eve re-sent (her outcome, in her basis) along his setting."""
+    """Bob measures the eigenstate Eve re-sent (her outcome, in her basis) along his setting.
+
+    Raises ``ValueError`` for an outcome other than 0/1, an Eve setting outside
+    :data:`EVE_SETTINGS` or a Bob setting outside :data:`SETTINGS`.
+    """
     eve_outcomes = np.asarray(eve_outcomes, dtype=int)
     eve_settings = np.asarray(eve_settings)
     bob_settings = np.asarray(bob_settings)
     if not (len(eve_outcomes) == len(eve_settings) == len(bob_settings)):
         raise ValueError("eve_outcomes, eve_settings and bob_settings must have the same length")
+    require_values(eve_outcomes, (0, 1), "eve_outcomes")
+    require_values(eve_settings, EVE_SETTINGS, "eve_settings")
+    require_values(bob_settings, SETTINGS, "bob_settings")
 
     outcomes = np.empty(len(eve_outcomes), dtype=int)
-    for k, (bit, e, b) in enumerate(product((0, 1), EVE_SETTINGS, SETTINGS)):
-        idx = np.flatnonzero((eve_outcomes == bit) & (eve_settings == e) & (bob_settings == b))
-        if idx.size == 0:
-            continue
-        circuit = measure_along(prepare_qubit(bit, EVE_PREP_BASIS[e]), b)
-        memory = _run_group(circuit, int(idx.size), simulator, seed, k)
+    groups = (
+        (
+            np.flatnonzero((eve_outcomes == bit) & (eve_settings == e) & (bob_settings == b)),
+            measure_along(prepare_qubit(bit, EVE_PREP_BASIS[e]), b),
+        )
+        for bit, e, b in product((0, 1), EVE_SETTINGS, SETTINGS)
+    )
+    for idx, memory in run_grouped(groups, simulator, seed=seed):
         outcomes[idx] = np.fromiter(map(int, memory), dtype=int, count=idx.size)
     return outcomes
 
@@ -219,13 +224,19 @@ def correlation(df: pd.DataFrame, alice_setting: str, bob_setting: str) -> float
 
 
 def chsh(df: pd.DataFrame) -> float:
-    """The CHSH value ``S`` of a transcript; ``nan`` if any of its four setting pairs is absent."""
+    """The CHSH value ``S`` of a transcript; ``nan`` if any of its four setting pairs is absent.
+
+    Equivalent to summing :func:`correlation` over :data:`CHSH_TERMS`, but
+    computed from a single pass over the transcript.
+    """
+    agree = pd.Series(df["alice_bit"].to_numpy() == df["bob_outcome"].to_numpy())
+    keys = [df["alice_basis"].to_numpy(), df["bob_basis"].to_numpy()]
+    p_agree = agree.groupby(keys).mean()
     total = 0.0
-    for (a, b), sign in CHSH_TERMS.items():
-        e = correlation(df, a, b)
-        if np.isnan(e):
+    for pair, sign in CHSH_TERMS.items():
+        if pair not in p_agree.index:
             return float("nan")
-        total += sign * e
+        total += sign * (2.0 * float(p_agree[pair]) - 1.0)
     return total
 
 

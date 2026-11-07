@@ -33,7 +33,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
-    noises = parse_noise_spec(args.noise) if isinstance(args.noise, str) else args.noise
+    noises = args.noise  # argparse applies parse_noise_spec to the default string as well
     seeds = range(args.seeds)
     started = time.perf_counter()
 

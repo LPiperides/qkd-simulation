@@ -1,11 +1,11 @@
-"""Command-line interface: ``qkd-sim run`` and ``qkd-sim sweep``.
+"""Command-line interface: ``qkd-simulation run`` and ``qkd-simulation sweep``.
 
 Examples::
 
-    qkd-sim run --protocol bb84 -n 10000 --eve --seed 42
-    qkd-sim run --protocol sarg04 -n 5000 --noise 0.05 --show 8
-    qkd-sim run --protocol e91 -n 10000 --seed 42 --json
-    qkd-sim sweep --protocol all --noise 0:0.3:0.02 --seeds 5 -n 4000 --out data/sweep.csv
+    qkd-simulation run --protocol bb84 -n 10000 --eve --seed 42
+    qkd-simulation run --protocol sarg04 -n 5000 --noise 0.05 --show 8
+    qkd-simulation run --protocol e91 -n 10000 --seed 42 --json
+    qkd-simulation sweep --protocol all --noise 0:0.3:0.02 --seeds 5 -n 4000 --out data/sweep.csv
 """
 
 from __future__ import annotations
@@ -26,10 +26,53 @@ from .metrics import Summary, summarize
 from .theory import expected, expected_chsh
 
 PROTOCOL_CHOICES = sorted(PROTOCOLS)
+PROG = "qkd-simulation"
+"""Console-script name, as installed by ``pyproject.toml``."""
+
+
+def probability(text: str) -> float:
+    """argparse type: a float in ``[0, 1]``."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+    if not 0.0 <= value <= 1.0:
+        raise argparse.ArgumentTypeError(f"noise {value} outside [0, 1]")
+    return value
+
+
+def non_negative_int(text: str) -> int:
+    """argparse type: an integer ``>= 0``."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not an integer") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError(f"expected a non-negative integer, got {value}")
+    return value
+
+
+def positive_int(text: str) -> int:
+    """argparse type: an integer ``>= 1``."""
+    value = non_negative_int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"expected a positive integer, got {value}")
+    return value
+
+
+def error_correction_factor(text: str) -> float:
+    """argparse type: an error-correction inefficiency ``f_ec >= 1``."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+    if value < 1.0:
+        raise argparse.ArgumentTypeError(f"f_ec must be >= 1 (Shannon limit), got {value}")
+    return value
 
 
 def parse_noise_spec(spec: str) -> list[float]:
-    """Parse ``'start:stop:step'`` (inclusive) or a comma-separated list of values."""
+    """Parse ``'start:stop:step'`` (inclusive, never exceeding ``stop``) or a comma list."""
     if ":" in spec:
         parts = spec.split(":")
         if len(parts) != 3:
@@ -37,7 +80,8 @@ def parse_noise_spec(spec: str) -> list[float]:
         start, stop, step = (float(p) for p in parts)
         if step <= 0 or stop < start:
             raise argparse.ArgumentTypeError("noise range needs step > 0 and stop >= start")
-        count = int(round((stop - start) / step)) + 1
+        # floor (with a tolerance for binary rounding) so the last point never overshoots stop
+        count = math.floor((stop - start) / step + 1e-9) + 1
         values = [round(start + i * step, 10) for i in range(count)]
     else:
         values = [float(p) for p in spec.split(",") if p.strip()]
@@ -140,7 +184,7 @@ def sweep_records(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="qkd-sim",
+        prog=PROG,
         description="Simulate BB84, B92, SARG04 and E91 quantum key distribution on Qiskit Aer.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
@@ -148,24 +192,37 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="simulate one run and print its metrics")
     run.add_argument("--protocol", "-p", choices=PROTOCOL_CHOICES, required=True)
     run.add_argument(
-        "--num-bits", "-n", type=int, default=1000, help="qubits (or entangled pairs) to send"
+        "--num-bits",
+        "-n",
+        type=non_negative_int,
+        default=1000,
+        help="qubits (or entangled pairs) to send",
     )
     run.add_argument("--eve", action="store_true", help="add an intercept-and-resend Eve")
-    run.add_argument("--noise", type=float, default=0.0, help="depolarizing probability")
+    run.add_argument(
+        "--noise", type=probability, default=0.0, help="depolarizing probability in [0, 1]"
+    )
     run.add_argument("--seed", type=int, default=None, help="seed for reproducible runs")
-    run.add_argument("--f-ec", type=float, default=1.0, help="error-correction inefficiency")
-    run.add_argument("--show", type=int, default=0, metavar="K", help="print first K rounds")
+    run.add_argument(
+        "--f-ec",
+        type=error_correction_factor,
+        default=1.0,
+        help="error-correction inefficiency (>= 1)",
+    )
+    run.add_argument(
+        "--show", type=non_negative_int, default=0, metavar="K", help="print first K rounds"
+    )
     run.add_argument("--csv", metavar="PATH", help="write the full transcript to CSV")
     run.add_argument("--json", action="store_true", help="print the summary as JSON")
 
     sweep = sub.add_parser("sweep", help="scan channel noise over seeds and write a CSV")
     sweep.add_argument("--protocol", "-p", choices=[*PROTOCOL_CHOICES, "all"], default="all")
     sweep.add_argument("--noise", type=parse_noise_spec, default="0:0.3:0.02")
-    sweep.add_argument("--seeds", type=int, default=5, help="number of seeds per point")
+    sweep.add_argument("--seeds", type=positive_int, default=5, help="number of seeds per point")
     sweep.add_argument("--seed-base", type=int, default=0, help="first seed value")
-    sweep.add_argument("--num-bits", "-n", type=int, default=4000)
+    sweep.add_argument("--num-bits", "-n", type=non_negative_int, default=4000)
     sweep.add_argument("--eve", action="store_true")
-    sweep.add_argument("--f-ec", type=float, default=1.0)
+    sweep.add_argument("--f-ec", type=error_correction_factor, default=1.0)
     sweep.add_argument("--out", required=True, metavar="PATH", help="CSV to write")
     return parser
 
@@ -196,7 +253,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             theory_chsh=theory_chsh_for(s.protocol, s.with_eve, args.noise),
             seconds=elapsed,
         )
-        print(json.dumps(payload, indent=2, default=_json_default))
+        print(json.dumps(json_ready(payload), indent=2, allow_nan=False))
     else:
         print(format_summary(s, noise=args.noise, seed=args.seed))
         print(f"  simulated in     {elapsed:.2f} s")
@@ -209,7 +266,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_sweep(args: argparse.Namespace) -> int:
     protocols = PROTOCOL_CHOICES if args.protocol == "all" else [args.protocol]
-    noises = parse_noise_spec(args.noise) if isinstance(args.noise, str) else args.noise
+    noises = args.noise  # argparse applies parse_noise_spec to the default string as well
     seeds = range(args.seed_base, args.seed_base + args.seeds)
     started = time.perf_counter()
     table = sweep_records(
@@ -229,12 +286,20 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     return 0
 
 
-def _json_default(value):
-    if isinstance(value, float) and math.isnan(value):
-        return None
-    if isinstance(value, np.generic):
-        return value.item()
-    raise TypeError(f"cannot serialise {type(value).__name__}")
+def json_ready(payload: dict) -> dict:
+    """Copy of ``payload`` with numpy scalars unboxed and NaN replaced by ``None``.
+
+    ``json.dumps`` would otherwise emit the bare token ``NaN``, which is not
+    valid JSON and is rejected by ``jq`` and JavaScript parsers.
+    """
+    out = {}
+    for key, value in payload.items():
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, float) and math.isnan(value):
+            value = None
+        out[key] = value
+    return out
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -245,7 +310,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "sweep":
         return cmd_sweep(args)
     parser.error(f"unknown command {args.command!r}")
-    return 2
 
 
 if __name__ == "__main__":

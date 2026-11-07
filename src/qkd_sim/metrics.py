@@ -44,12 +44,23 @@ def key_retention(df: pd.DataFrame) -> float:
     return float(df["sifted"].mean())
 
 
-def qber(df: pd.DataFrame) -> float:
-    """Quantum bit error rate: disagreement between Alice and Bob on the sifted key."""
-    kept = sifted(df)
+def _qber(kept: pd.DataFrame) -> float:
     if len(kept) == 0:
         return float("nan")
     return float((kept["alice_bit"].to_numpy() != kept["bob_bit"].to_numpy(dtype=int)).mean())
+
+
+def qber(df: pd.DataFrame) -> float:
+    """Quantum bit error rate: disagreement between Alice and Bob on the sifted key."""
+    return _qber(sifted(df))
+
+
+def _eve_agreement(kept: pd.DataFrame, *, with_eve: bool) -> float:
+    if not with_eve or len(kept) == 0:
+        return float("nan")
+    guesses = kept["eve_guess"]
+    correct = guesses.notna() & (guesses.fillna(-1).astype(int) == kept["alice_bit"])
+    return float(correct.mean())
 
 
 def eve_agreement(df: pd.DataFrame) -> float:
@@ -57,14 +68,7 @@ def eve_agreement(df: pd.DataFrame) -> float:
 
     Returns ``nan`` when the transcript has no eavesdropper.
     """
-    if not has_eve(df):
-        return float("nan")
-    kept = sifted(df)
-    if len(kept) == 0:
-        return float("nan")
-    guesses = kept["eve_guess"]
-    correct = guesses.notna() & (guesses.fillna(-1).astype(int) == kept["alice_bit"])
-    return float(correct.mean())
+    return _eve_agreement(sifted(df), with_eve=has_eve(df))
 
 
 def _categories(values) -> pd.Series:
@@ -99,14 +103,17 @@ def info_ab(q: float) -> float:
     return float(1.0 - h2(q))
 
 
-def info_ae(df: pd.DataFrame) -> float:
-    """Empirical I(A:E) between Alice's sifted key bits and Eve's guesses; 0 without Eve."""
-    if not has_eve(df):
+def _info_ae(kept: pd.DataFrame, *, with_eve: bool) -> float:
+    if not with_eve:
         return 0.0
-    kept = sifted(df)
     if len(kept) == 0:
         return float("nan")
     return mutual_information(kept["alice_bit"], kept["eve_guess"])
+
+
+def info_ae(df: pd.DataFrame) -> float:
+    """Empirical I(A:E) between Alice's sifted key bits and Eve's guesses; 0 without Eve."""
+    return _info_ae(sifted(df), with_eve=has_eve(df))
 
 
 @dataclass(frozen=True)
@@ -138,18 +145,20 @@ def summarize(df: pd.DataFrame, *, protocol: str, f_ec: float = 1.0) -> Summary:
     :mod:`qkd_sim.keyrate`). ``chsh`` and ``di_key_rate`` are NaN unless the
     transcript carries Bell-test rounds, i.e. came from E91.
     """
+    kept = sifted(df)  # filtered once and shared by every sifted-key metric
+    with_eve = has_eve(df)
     retention = key_retention(df)
-    error = qber(df)
+    error = _qber(kept)
     bell = chsh_value(df) if has_chsh(df) else float("nan")
     return Summary(
         protocol=protocol,
         num_bits=len(df),
-        with_eve=has_eve(df),
+        with_eve=with_eve,
         retention=retention,
         qber=error,
-        eve_agreement=eve_agreement(df),
+        eve_agreement=_eve_agreement(kept, with_eve=with_eve),
         i_ab=info_ab(error) if not np.isnan(error) else float("nan"),
-        i_ae=info_ae(df),
+        i_ae=_info_ae(kept, with_eve=with_eve),
         key_rate=secret_key_rate(error, retention, f_ec),
         f_ec=f_ec,
         chsh=bell,

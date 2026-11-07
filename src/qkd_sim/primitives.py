@@ -16,7 +16,8 @@ two ways of executing those circuits on ``AerSimulator``:
   notices that every round of a protocol is one of at most eight distinct
   circuits (four states x two measurement bases) and runs each distinct
   circuit once with as many shots as there are rounds that need it. Cost is
-  therefore independent of the number of qubits sent.
+  therefore independent of the number of qubits sent. The grouping machinery
+  itself lives in :func:`run_grouped` so that :mod:`qkd_sim.e91` can reuse it.
 
 Every prepared circuit ends in an identity gate (``CHANNEL_GATE``). That gate
 does nothing in the noiseless case; it exists so that a channel noise model
@@ -27,7 +28,7 @@ gate-less |0> state, which would otherwise travel noise-free. See
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from itertools import product
 
 import numpy as np
@@ -47,6 +48,17 @@ STATE_LABELS: dict[tuple[str, int], str] = {
 
 CHANNEL_GATE = "id"
 """Name of the instruction that represents the quantum channel in a circuit."""
+
+SEED_LIMIT = 2**31
+"""Exclusive upper bound on any ``seed_simulator`` handed to Aer (fits an int32)."""
+
+
+def require_values(values: np.ndarray, allowed: Sequence, name: str) -> None:
+    """Raise ``ValueError`` unless every element of ``values`` is one of ``allowed``."""
+    bad = ~np.isin(values, list(allowed))
+    if bad.any():
+        offending = sorted({v.item() if isinstance(v, np.generic) else v for v in values[bad]})
+        raise ValueError(f"{name} must be in {tuple(allowed)}, got {offending}")
 
 
 def state_label(basis: str, bit: int) -> str:
@@ -126,6 +138,37 @@ def run_batch(
     return outcomes
 
 
+def run_grouped(
+    groups: Iterable[tuple[np.ndarray, QuantumCircuit]],
+    simulator: AerSimulator,
+    *,
+    seed: int | None = None,
+) -> Iterator[tuple[np.ndarray, list[str]]]:
+    """Run each ``(indices, circuit)`` group once with ``shots = len(indices)``.
+
+    This is the engine behind every fast sampler in the package. Rounds that
+    share a circuit are grouped; each distinct circuit is executed once with
+    per-shot memory enabled and the shots are handed back together with the
+    round indices they belong to, so the caller can scatter them into place.
+    Empty groups are skipped but still consume their slot in the seed
+    sequence, so the result for a given group does not depend on which other
+    groups happen to be populated.
+
+    ``seed`` makes the whole sequence reproducible: a ``numpy`` generator
+    seeded with it draws an independent ``seed_simulator`` below
+    :data:`SEED_LIMIT` for every group, so any number of groups is safe.
+    """
+    seed_rng = None if seed is None else np.random.default_rng(int(seed))
+    for idx, circuit in groups:
+        options = {}
+        if seed_rng is not None:
+            options["seed_simulator"] = int(seed_rng.integers(0, SEED_LIMIT))
+        if idx.size == 0:
+            continue
+        result = simulator.run(circuit, shots=int(idx.size), memory=True, **options).result()
+        yield idx, result.get_memory()
+
+
 def sample_outcomes(
     bits: Sequence[int] | np.ndarray,
     bases: Sequence[str] | np.ndarray,
@@ -136,35 +179,35 @@ def sample_outcomes(
 ) -> np.ndarray:
     """Measure state ``(bits[i], bases[i])`` in ``meas_bases[i]`` for every ``i``.
 
-    Rounds are grouped by their (bit, basis, measurement basis) triple. Each of
-    the at most eight distinct circuits is executed once with
-    ``shots = <number of rounds in the group>`` and per-shot memory enabled,
-    and the shot results are scattered back to the rounds that requested
-    them. Shots are independent samples of the same circuit, so this is
-    statistically identical to running one circuit per round, at a tiny
-    fraction of the cost.
+    Rounds are grouped by their (bit, basis, measurement basis) triple and each
+    of the at most eight distinct circuits runs once through
+    :func:`run_grouped`. Shots are independent samples of the same circuit, so
+    this is statistically identical to running one circuit per round, at a
+    tiny fraction of the cost.
 
-    ``seed`` makes the result reproducible: group ``k`` runs with
-    ``seed_simulator = seed + k``.
+    Raises ``ValueError`` if any bit is not 0/1 or any basis is not in
+    :data:`BASES`; every round is therefore guaranteed to be filled.
     """
     bits = np.asarray(bits, dtype=int)
     bases = np.asarray(bases)
     meas_bases = np.asarray(meas_bases)
     if not (len(bits) == len(bases) == len(meas_bases)):
         raise ValueError("bits, bases and meas_bases must have the same length")
+    require_values(bits, (0, 1), "bits")
+    require_values(bases, BASES, "bases")
+    require_values(meas_bases, BASES, "meas_bases")
 
     outcomes = np.empty(len(bits), dtype=int)
     if len(bits) == 0:
         return outcomes
 
-    for k, (bit, basis, meas_basis) in enumerate(product((0, 1), BASES, BASES)):
-        idx = np.flatnonzero((bits == bit) & (bases == basis) & (meas_bases == meas_basis))
-        if idx.size == 0:
-            continue
-        circuit = add_measurement(prepare_qubit(bit, basis), meas_basis)
-        options = {} if seed is None else {"seed_simulator": int(seed) + k}
-        result = simulator.run(circuit, shots=int(idx.size), memory=True, **options).result()
-        memory = result.get_memory()
+    groups = (
+        (
+            np.flatnonzero((bits == bit) & (bases == basis) & (meas_bases == meas_basis)),
+            add_measurement(prepare_qubit(bit, basis), meas_basis),
+        )
+        for bit, basis, meas_basis in product((0, 1), BASES, BASES)
+    )
+    for idx, memory in run_grouped(groups, simulator, seed=seed):
         outcomes[idx] = np.fromiter(map(int, memory), dtype=int, count=idx.size)
-
     return outcomes

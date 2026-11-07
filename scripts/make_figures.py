@@ -193,6 +193,8 @@ def fig_qber_comparison(df: pd.DataFrame, out: Path) -> None:
             (width / 2, tapped, SERIES[protocol], "intercept-and-resend Eve"),
         ):
             values = subset.loc[subset["protocol"] == protocol, "qber"]
+            if values.empty:
+                continue
             ax.bar(
                 xs[i] + offset,
                 values.mean(),
@@ -212,8 +214,11 @@ def fig_qber_comparison(df: pd.DataFrame, out: Path) -> None:
             zorder=4,
             label="analytic value" if i == 0 else None,
         )
+        tapped_qber = tapped.loc[tapped["protocol"] == protocol, "qber"]
+        if tapped_qber.empty:
+            continue
         ax.annotate(
-            f"{tapped.loc[tapped['protocol'] == protocol, 'qber'].mean():.3f}",
+            f"{tapped_qber.mean():.3f}",
             (xs[i] + width / 2, theory),
             xytext=(0, 8),
             textcoords="offset points",
@@ -418,6 +423,8 @@ def fig_chsh_vs_noise(df: pd.DataFrame, out: Path) -> None:
         (True, "s", (0, (4, 3)), "intercept-and-resend Eve"),
     ):
         stats = aggregate(e91[e91["with_eve"] == with_eve], "chsh").sort_values("noise")
+        if stats.empty:
+            continue
         x = stats["noise"].to_numpy()
         mean = stats["mean"].to_numpy()
         spread = np.nan_to_num(stats["std"].to_numpy())

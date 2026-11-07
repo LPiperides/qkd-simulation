@@ -118,3 +118,17 @@ def test_sample_outcomes_validates_lengths(ideal_simulator):
     with pytest.raises(ValueError):
         sample_outcomes([0, 1], ["+"], ["+", "x"], ideal_simulator)
     assert sample_outcomes([], [], [], ideal_simulator).shape == (0,)
+
+
+@pytest.mark.parametrize(
+    ("bits", "bases", "meas"),
+    [
+        ([0, 2], ["+", "+"], ["+", "+"]),
+        ([0, 0], ["+", "z"], ["+", "+"]),
+        ([0, 0], ["+", "+"], ["+", "pi/4"]),
+    ],
+)
+def test_sample_outcomes_rejects_unknown_alphabet(ideal_simulator, bits, bases, meas):
+    """An out-of-alphabet round must raise rather than return uninitialised memory."""
+    with pytest.raises(ValueError):
+        sample_outcomes(bits, bases, meas, ideal_simulator)

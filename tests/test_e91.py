@@ -145,3 +145,18 @@ def test_summary_carries_chsh_and_di_rate(run):
 
     other = summarize(run("bb84"), protocol="bb84")
     assert math.isnan(other.chsh) and math.isnan(other.di_key_rate)
+
+
+def test_samplers_reject_unknown_settings(ideal_simulator):
+    with pytest.raises(ValueError):
+        e91.sample_pair_outcomes(["0", "x"], ["pi/4", "pi/4"], ideal_simulator)
+    with pytest.raises(ValueError):
+        e91.sample_resent_outcomes([0, 1], ["0", "pi/4"], ["pi/4", "pi/4"], ideal_simulator)
+    with pytest.raises(ValueError):
+        e91.sample_resent_outcomes([0, 2], ["0", "0"], ["pi/4", "pi/4"], ideal_simulator)
+
+
+def test_chsh_matches_sum_of_correlations(run):
+    df = run("e91", noise=0.05)
+    by_hand = sum(sign * e91.correlation(df, a, b) for (a, b), sign in e91.CHSH_TERMS.items())
+    assert math.isclose(e91.chsh(df), by_hand, rel_tol=0, abs_tol=1e-12)
